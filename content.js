@@ -2,16 +2,22 @@
 (function() {
   'use strict';
 
-  // リポジトリページかどうかを判定
+  // リポジトリページかどうかを判定（個別ファイルページも含む）
   function isRepositoryPage() {
     const path = window.location.pathname;
-    // /username/repo の形式かチェック（/で始まり、2つのセグメントがある）
+    // /username/repo または /username/repo/blob/... などの形式かチェック
     const pathSegments = path.split('/').filter(segment => segment);
-    return pathSegments.length >= 2 && 
-           pathSegments[0] !== 'settings' && 
-           pathSegments[0] !== 'orgs' &&
-           pathSegments[0] !== 'new' &&
-           !pathSegments[0].startsWith('_');
+    // 最低2つのセグメント（username/repo）が必要
+    if (pathSegments.length < 2) {
+      return false;
+    }
+    // 除外するパス
+    const excludedPaths = ['settings', 'orgs', 'new', 'login', 'signup', 'join'];
+    if (excludedPaths.includes(pathSegments[0]) || pathSegments[0].startsWith('_')) {
+      return false;
+    }
+    // /username/repo または /username/repo/blob/... などの形式
+    return true;
   }
 
   // ユーザー名を取得
@@ -84,6 +90,7 @@
       // 1. リポジトリ名の直後（最優先）- aria-current="page"を持つ要素内のリポジトリ名を探す
       () => {
         // リポジトリ名は aria-current="page" を持つ AppHeader-context-item の中にある
+        // 個別ファイルページでも同じ構造
         const repoContextItem = document.querySelector('.AppHeader-context-item[aria-current="page"]');
         if (repoContextItem) {
           const repoTitle = repoContextItem.querySelector('.AppHeader-context-item-label');
@@ -93,6 +100,24 @@
             repoTitle.insertAdjacentElement('afterend', link);
             console.log('[GH Repo List] Button added right after repo title');
             return true;
+          }
+        }
+        
+        // フォールバック: context-region内のリポジトリ名を探す（個別ファイルページ用）
+        const contextRegion = document.querySelector('context-region');
+        if (contextRegion) {
+          // リポジトリ名のcrumbを探す（ユーザー名のcrumbの次）
+          const crumbs = contextRegion.querySelectorAll('context-region-crumb');
+          if (crumbs.length >= 2) {
+            // 2番目のcrumbがリポジトリ名
+            const repoCrumb = crumbs[1];
+            const repoTitle = repoCrumb.querySelector('.AppHeader-context-item-label');
+            if (repoTitle && !repoCrumb.querySelector('[data-gh-repo-list-shortcut]')) {
+              const link = createLinkButton(username);
+              repoTitle.insertAdjacentElement('afterend', link);
+              console.log('[GH Repo List] Button added after repo title in context-region');
+              return true;
+            }
           }
         }
         
