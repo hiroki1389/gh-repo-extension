@@ -79,38 +79,80 @@
 
     console.log('[GH Repo List] Attempting to add button for user:', username);
 
-    // 複数の場所を試してリンクを追加
+    // 複数の場所を試してリンクを追加（リポジトリ名の右側を優先）
     const insertionPoints = [
-      // 1. ユーザー名のリンクの後（最も確実な方法）
+      // 1. リポジトリ名の直後（最優先）- aria-current="page"を持つ要素内のリポジトリ名を探す
       () => {
-        // GitHubのユーザー名リンクを探す（複数のパターンを試す）
-        const userLinks = [
-          ...document.querySelectorAll(`a[href="/${username}"]`),
-          ...document.querySelectorAll(`a[href="/${username}/"]`),
-          document.querySelector(`a[href*="/${username}"]`),
-        ].filter(Boolean);
-        
-        for (const userLink of userLinks) {
-          // ユーザー名リンクの親要素を探す
-          const parent = userLink.parentElement;
-          if (parent && !parent.querySelector('[data-gh-repo-list-shortcut]')) {
+        // リポジトリ名は aria-current="page" を持つ AppHeader-context-item の中にある
+        const repoContextItem = document.querySelector('.AppHeader-context-item[aria-current="page"]');
+        if (repoContextItem) {
+          const repoTitle = repoContextItem.querySelector('.AppHeader-context-item-label');
+          if (repoTitle && !repoContextItem.querySelector('[data-gh-repo-list-shortcut]')) {
             const link = createLinkButton(username);
-            // ユーザー名リンクの後に挿入
-            if (userLink.nextSibling) {
-              parent.insertBefore(link, userLink.nextSibling);
-            } else {
-              parent.appendChild(link);
-            }
-            console.log('[GH Repo List] Button added after user link');
+            // リポジトリ名の直後に挿入（インライン要素として）
+            repoTitle.insertAdjacentElement('afterend', link);
+            console.log('[GH Repo List] Button added right after repo title');
             return true;
+          }
+        }
+        
+        // フォールバック: リポジトリ名の要素を探す（複数のパターンを試す）
+        const repoTitleSelectors = [
+          'strong[itemprop="name"]',
+          'h1 strong',
+          'h1[itemprop="name"]',
+          '.AppHeader-context-item-label strong',
+          'h1 .AppHeader-context-item-label'
+        ];
+        
+        for (const selector of repoTitleSelectors) {
+          const repoTitle = document.querySelector(selector);
+          if (repoTitle) {
+            // リポジトリ名の親要素を取得
+            const parent = repoTitle.parentElement;
+            if (parent && !parent.querySelector('[data-gh-repo-list-shortcut]')) {
+              const link = createLinkButton(username);
+              // リポジトリ名の直後に挿入（インライン要素として）
+              repoTitle.insertAdjacentElement('afterend', link);
+              console.log('[GH Repo List] Button added right after repo title (fallback)');
+              return true;
+            }
           }
         }
         return false;
       },
-      // 2. AppHeader-context（GitHubの新しいUI）
+      // 2. AppHeader-context内でリポジトリ名の後に追加
       () => {
         const context = document.querySelector('.AppHeader-context');
         if (context && !context.querySelector('[data-gh-repo-list-shortcut]')) {
+          // リポジトリ名は aria-current="page" を持つ AppHeader-context-item の中にある
+          const repoContextItem = context.querySelector('.AppHeader-context-item[aria-current="page"]');
+          if (repoContextItem) {
+            const repoTitle = repoContextItem.querySelector('.AppHeader-context-item-label');
+            if (repoTitle) {
+              const link = createLinkButton(username);
+              // リポジトリ名の後に挿入
+              repoTitle.insertAdjacentElement('afterend', link);
+              console.log('[GH Repo List] Button added in AppHeader-context after repo title');
+              return true;
+            }
+          }
+          // フォールバック: リポジトリ名の要素を探す
+          const repoTitle = context.querySelector('strong[itemprop="name"]') ||
+                           context.querySelector('strong');
+          if (repoTitle) {
+            const link = createLinkButton(username);
+            // リポジトリ名の親要素に追加
+            const parent = repoTitle.parentElement;
+            if (parent) {
+              repoTitle.insertAdjacentElement('afterend', link);
+            } else {
+              context.appendChild(link);
+            }
+            console.log('[GH Repo List] Button added in AppHeader-context after repo title (fallback)');
+            return true;
+          }
+          // リポジトリ名が見つからない場合は、コンテキストの最後に追加
           const link = createLinkButton(username);
           context.appendChild(link);
           console.log('[GH Repo List] Button added to AppHeader-context');
@@ -118,7 +160,7 @@
         }
         return false;
       },
-      // 3. リポジトリ名の親要素
+      // 3. リポジトリ名の親要素（h1など）の後に追加
       () => {
         const repoTitle = document.querySelector('.AppHeader-context-item-label') ||
                           document.querySelector('strong[itemprop="name"]') ||
@@ -126,12 +168,17 @@
                           document.querySelector('h1[itemprop="name"]');
         if (repoTitle) {
           const parent = repoTitle.closest('.AppHeader-context') || 
-                         repoTitle.closest('h1')?.parentElement ||
-                         repoTitle.parentElement;
+                         repoTitle.closest('h1')?.parentElement;
           if (parent && !parent.querySelector('[data-gh-repo-list-shortcut]')) {
             const link = createLinkButton(username);
-            parent.appendChild(link);
-            console.log('[GH Repo List] Button added near repo title');
+            // リポジトリ名を含む要素の後に挿入
+            const repoContainer = repoTitle.closest('h1') || repoTitle.parentElement;
+            if (repoContainer && repoContainer.nextSibling) {
+              parent.insertBefore(link, repoContainer.nextSibling);
+            } else {
+              parent.appendChild(link);
+            }
+            console.log('[GH Repo List] Button added after repo container');
             return true;
           }
         }
