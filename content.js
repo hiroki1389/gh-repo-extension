@@ -2,67 +2,132 @@
 (function() {
   'use strict';
 
+  // 定数
+  const SELECTORS = {
+    REPO_CONTEXT_ITEM: '.AppHeader-context-item[aria-current="page"]',
+    REPO_TITLE_LABEL: '.AppHeader-context-item-label',
+    CONTEXT_REGION: 'context-region',
+    CONTEXT_CRUMB: 'context-region-crumb',
+    APP_HEADER_CONTEXT: '.AppHeader-context',
+    BREADCRUMB: 'nav[aria-label="Breadcrumb"]',
+    BUTTON: '[data-gh-repo-list-shortcut]'
+  };
+
+  const EXCLUDED_PATHS = ['settings', 'orgs', 'new', 'login', 'signup', 'join'];
+  const RETRY_DELAY = 1000;
+  const DOM_CHECK_DELAY = 500;
+
   // リポジトリページかどうかを判定（個別ファイルページも含む）
   function isRepositoryPage() {
-    const path = window.location.pathname;
-    // /username/repo または /username/repo/blob/... などの形式かチェック
-    const pathSegments = path.split('/').filter(segment => segment);
-    // 最低2つのセグメント（username/repo）が必要
+    const pathSegments = window.location.pathname.split('/').filter(segment => segment);
+    
     if (pathSegments.length < 2) {
       return false;
     }
-    // 除外するパス
-    const excludedPaths = ['settings', 'orgs', 'new', 'login', 'signup', 'join'];
-    if (excludedPaths.includes(pathSegments[0]) || pathSegments[0].startsWith('_')) {
-      return false;
-    }
-    // /username/repo または /username/repo/blob/... などの形式
-    return true;
+    
+    const firstSegment = pathSegments[0];
+    return !EXCLUDED_PATHS.includes(firstSegment) && !firstSegment.startsWith('_');
   }
 
   // ユーザー名を取得
   function getUsername() {
     const pathSegments = window.location.pathname.split('/').filter(segment => segment);
-    return pathSegments[0];
+    return pathSegments[0] || null;
   }
 
-  // リンクボタンを作成する関数
+  // リンクボタンを作成
   function createLinkButton(username) {
     const link = document.createElement('a');
     link.href = `https://github.com/${username}?tab=repositories`;
     link.textContent = '📦 リポジトリ一覧';
     link.setAttribute('data-gh-repo-list-shortcut', 'true');
     link.setAttribute('title', `${username}のリポジトリ一覧を見る`);
-    link.style.cssText = `
-      display: inline-flex;
-      align-items: center;
-      margin-left: 8px;
-      padding: 5px 16px;
-      background-color: #0969da;
-      color: white !important;
-      text-decoration: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-      transition: background-color 0.2s;
-      white-space: nowrap;
-      cursor: pointer;
-      vertical-align: middle;
-      line-height: 20px;
-      box-shadow: 0 1px 0 rgba(27, 31, 36, 0.1);
-    `;
+    
+    // スタイル設定
+    Object.assign(link.style, {
+      display: 'inline-flex',
+      alignItems: 'center',
+      marginLeft: '8px',
+      padding: '5px 16px',
+      backgroundColor: '#0969da',
+      color: 'white',
+      textDecoration: 'none',
+      borderRadius: '6px',
+      fontSize: '14px',
+      fontWeight: '500',
+      transition: 'background-color 0.2s',
+      whiteSpace: 'nowrap',
+      cursor: 'pointer',
+      verticalAlign: 'middle',
+      lineHeight: '20px',
+      boxShadow: '0 1px 0 rgba(27, 31, 36, 0.1)'
+    });
+
     link.addEventListener('mouseenter', () => {
       link.style.backgroundColor = '#0860ca';
-      link.style.textDecoration = 'none';
     });
+    
     link.addEventListener('mouseleave', () => {
       link.style.backgroundColor = '#0969da';
     });
-    link.addEventListener('click', (e) => {
-      // 確実に遷移する
+    
+    link.addEventListener('click', () => {
       window.location.href = `https://github.com/${username}?tab=repositories`;
     });
+
     return link;
+  }
+
+  // リポジトリ名要素を探す
+  function findRepositoryTitle() {
+    // 1. aria-current="page"を持つ要素内のリポジトリ名
+    const repoContextItem = document.querySelector(SELECTORS.REPO_CONTEXT_ITEM);
+    if (repoContextItem) {
+      const repoTitle = repoContextItem.querySelector(SELECTORS.REPO_TITLE_LABEL);
+      if (repoTitle) {
+        return { element: repoTitle, container: repoContextItem };
+      }
+    }
+
+    // 2. context-region内のリポジトリ名crumb（個別ファイルページ用）
+    const contextRegion = document.querySelector(SELECTORS.CONTEXT_REGION);
+    if (contextRegion) {
+      const crumbs = contextRegion.querySelectorAll(SELECTORS.CONTEXT_CRUMB);
+      if (crumbs.length >= 2) {
+        const repoCrumb = crumbs[1];
+        const repoTitle = repoCrumb.querySelector(SELECTORS.REPO_TITLE_LABEL);
+        if (repoTitle) {
+          return { element: repoTitle, container: repoCrumb };
+        }
+      }
+    }
+
+    // 3. その他のセレクターで探す
+    const fallbackSelectors = [
+      'strong[itemprop="name"]',
+      'h1 strong',
+      'h1[itemprop="name"]'
+    ];
+
+    for (const selector of fallbackSelectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        return { element, container: element.parentElement };
+      }
+    }
+
+    return null;
+  }
+
+  // ボタンを挿入
+  function insertButton(repoTitle, container, username) {
+    if (container.querySelector(SELECTORS.BUTTON)) {
+      return false;
+    }
+
+    const link = createLinkButton(username);
+    repoTitle.insertAdjacentElement('afterend', link);
+    return true;
   }
 
   // リポジトリ一覧へのリンクを追加
@@ -73,224 +138,92 @@
 
     const username = getUsername();
     if (!username) {
-      console.log('[GH Repo List] Username not found');
       return;
     }
 
     // 既に追加済みかチェック
-    const existingLink = document.querySelector('[data-gh-repo-list-shortcut]');
-    if (existingLink) {
+    if (document.querySelector(SELECTORS.BUTTON)) {
       return;
     }
 
-    console.log('[GH Repo List] Attempting to add button for user:', username);
-
-    // 複数の場所を試してリンクを追加（リポジトリ名の右側を優先）
-    const insertionPoints = [
-      // 1. リポジトリ名の直後（最優先）- aria-current="page"を持つ要素内のリポジトリ名を探す
-      () => {
-        // リポジトリ名は aria-current="page" を持つ AppHeader-context-item の中にある
-        // 個別ファイルページでも同じ構造
-        const repoContextItem = document.querySelector('.AppHeader-context-item[aria-current="page"]');
-        if (repoContextItem) {
-          const repoTitle = repoContextItem.querySelector('.AppHeader-context-item-label');
-          if (repoTitle && !repoContextItem.querySelector('[data-gh-repo-list-shortcut]')) {
-            const link = createLinkButton(username);
-            // リポジトリ名の直後に挿入（インライン要素として）
-            repoTitle.insertAdjacentElement('afterend', link);
-            console.log('[GH Repo List] Button added right after repo title');
-            return true;
-          }
-        }
-        
-        // フォールバック: context-region内のリポジトリ名を探す（個別ファイルページ用）
-        const contextRegion = document.querySelector('context-region');
-        if (contextRegion) {
-          // リポジトリ名のcrumbを探す（ユーザー名のcrumbの次）
-          const crumbs = contextRegion.querySelectorAll('context-region-crumb');
-          if (crumbs.length >= 2) {
-            // 2番目のcrumbがリポジトリ名
-            const repoCrumb = crumbs[1];
-            const repoTitle = repoCrumb.querySelector('.AppHeader-context-item-label');
-            if (repoTitle && !repoCrumb.querySelector('[data-gh-repo-list-shortcut]')) {
-              const link = createLinkButton(username);
-              repoTitle.insertAdjacentElement('afterend', link);
-              console.log('[GH Repo List] Button added after repo title in context-region');
-              return true;
-            }
-          }
-        }
-        
-        // フォールバック: リポジトリ名の要素を探す（複数のパターンを試す）
-        const repoTitleSelectors = [
-          'strong[itemprop="name"]',
-          'h1 strong',
-          'h1[itemprop="name"]',
-          '.AppHeader-context-item-label strong',
-          'h1 .AppHeader-context-item-label'
-        ];
-        
-        for (const selector of repoTitleSelectors) {
-          const repoTitle = document.querySelector(selector);
-          if (repoTitle) {
-            // リポジトリ名の親要素を取得
-            const parent = repoTitle.parentElement;
-            if (parent && !parent.querySelector('[data-gh-repo-list-shortcut]')) {
-              const link = createLinkButton(username);
-              // リポジトリ名の直後に挿入（インライン要素として）
-              repoTitle.insertAdjacentElement('afterend', link);
-              console.log('[GH Repo List] Button added right after repo title (fallback)');
-              return true;
-            }
-          }
-        }
-        return false;
-      },
-      // 2. AppHeader-context内でリポジトリ名の後に追加
-      () => {
-        const context = document.querySelector('.AppHeader-context');
-        if (context && !context.querySelector('[data-gh-repo-list-shortcut]')) {
-          // リポジトリ名は aria-current="page" を持つ AppHeader-context-item の中にある
-          const repoContextItem = context.querySelector('.AppHeader-context-item[aria-current="page"]');
-          if (repoContextItem) {
-            const repoTitle = repoContextItem.querySelector('.AppHeader-context-item-label');
-            if (repoTitle) {
-              const link = createLinkButton(username);
-              // リポジトリ名の後に挿入
-              repoTitle.insertAdjacentElement('afterend', link);
-              console.log('[GH Repo List] Button added in AppHeader-context after repo title');
-              return true;
-            }
-          }
-          // フォールバック: リポジトリ名の要素を探す
-          const repoTitle = context.querySelector('strong[itemprop="name"]') ||
-                           context.querySelector('strong');
-          if (repoTitle) {
-            const link = createLinkButton(username);
-            // リポジトリ名の親要素に追加
-            const parent = repoTitle.parentElement;
-            if (parent) {
-              repoTitle.insertAdjacentElement('afterend', link);
-            } else {
-              context.appendChild(link);
-            }
-            console.log('[GH Repo List] Button added in AppHeader-context after repo title (fallback)');
-            return true;
-          }
-          // リポジトリ名が見つからない場合は、コンテキストの最後に追加
-          const link = createLinkButton(username);
-          context.appendChild(link);
-          console.log('[GH Repo List] Button added to AppHeader-context');
-          return true;
-        }
-        return false;
-      },
-      // 3. リポジトリ名の親要素（h1など）の後に追加
-      () => {
-        const repoTitle = document.querySelector('.AppHeader-context-item-label') ||
-                          document.querySelector('strong[itemprop="name"]') ||
-                          document.querySelector('h1 strong') ||
-                          document.querySelector('h1[itemprop="name"]');
-        if (repoTitle) {
-          const parent = repoTitle.closest('.AppHeader-context') || 
-                         repoTitle.closest('h1')?.parentElement;
-          if (parent && !parent.querySelector('[data-gh-repo-list-shortcut]')) {
-            const link = createLinkButton(username);
-            // リポジトリ名を含む要素の後に挿入
-            const repoContainer = repoTitle.closest('h1') || repoTitle.parentElement;
-            if (repoContainer && repoContainer.nextSibling) {
-              parent.insertBefore(link, repoContainer.nextSibling);
-            } else {
-              parent.appendChild(link);
-            }
-            console.log('[GH Repo List] Button added after repo container');
-            return true;
-          }
-        }
-        return false;
-      },
-      // 4. Breadcrumbナビゲーション
-      () => {
-        const breadcrumb = document.querySelector('nav[aria-label="Breadcrumb"]');
-        if (breadcrumb && !breadcrumb.querySelector('[data-gh-repo-list-shortcut]')) {
-          const link = createLinkButton(username);
-          breadcrumb.appendChild(link);
-          console.log('[GH Repo List] Button added to breadcrumb');
-          return true;
-        }
-        return false;
-      },
-      // 5. ページ上部の任意の場所（最後の手段）
-      () => {
-        const header = document.querySelector('header') || 
-                       document.querySelector('.AppHeader') ||
-                       document.querySelector('nav[role="navigation"]');
-        if (header && !header.querySelector('[data-gh-repo-list-shortcut]')) {
-          const link = createLinkButton(username);
-          header.appendChild(link);
-          console.log('[GH Repo List] Button added to header (fallback)');
-          return true;
-        }
-        return false;
-      }
-    ];
-
-    // 各挿入ポイントを試す
-    for (const tryInsert of insertionPoints) {
-      if (tryInsert()) {
+    // リポジトリ名要素を探してボタンを挿入
+    const repoTitleInfo = findRepositoryTitle();
+    if (repoTitleInfo) {
+      if (insertButton(repoTitleInfo.element, repoTitleInfo.container, username)) {
         return;
       }
     }
 
-    console.log('[GH Repo List] No insertion point found, retrying...');
-    // 要素が見つからない場合は少し待って再試行
-    setTimeout(addRepositoryListLink, 1000);
+    // フォールバック: AppHeader-contextに追加
+    const context = document.querySelector(SELECTORS.APP_HEADER_CONTEXT);
+    if (context && !context.querySelector(SELECTORS.BUTTON)) {
+      const link = createLinkButton(username);
+      context.appendChild(link);
+      return;
+    }
+
+    // フォールバック: Breadcrumbに追加
+    const breadcrumb = document.querySelector(SELECTORS.BREADCRUMB);
+    if (breadcrumb && !breadcrumb.querySelector(SELECTORS.BUTTON)) {
+      const link = createLinkButton(username);
+      breadcrumb.appendChild(link);
+      return;
+    }
+
+    // 要素が見つからない場合は再試行
+    setTimeout(addRepositoryListLink, RETRY_DELAY);
   }
 
-  // ページ読み込み時に実行
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', addRepositoryListLink);
-  } else {
-    addRepositoryListLink();
+  // 初期化
+  function init() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', addRepositoryListLink);
+    } else {
+      addRepositoryListLink();
+    }
   }
 
-  // SPA（Single Page Application）対応：URL変更を監視
-  let lastUrl = location.href;
-  const urlObserver = new MutationObserver(() => {
-    const url = location.href;
-    if (url !== lastUrl) {
-      lastUrl = url;
-      // 既存のリンクを削除
-      const existingLink = document.querySelector('[data-gh-repo-list-shortcut]');
-      if (existingLink) {
-        existingLink.remove();
+  // URL変更を監視（SPA対応）
+  function setupUrlObserver() {
+    let lastUrl = location.href;
+    const observer = new MutationObserver(() => {
+      const currentUrl = location.href;
+      if (currentUrl !== lastUrl) {
+        lastUrl = currentUrl;
+        const existingLink = document.querySelector(SELECTORS.BUTTON);
+        if (existingLink) {
+          existingLink.remove();
+        }
+        setTimeout(addRepositoryListLink, RETRY_DELAY);
       }
-      setTimeout(addRepositoryListLink, 1000);
-    }
-  });
-  urlObserver.observe(document, { subtree: true, childList: true });
-
-  // DOM変更も監視（GitHubの動的コンテンツ読み込みに対応）
-  let domCheckTimeout = null;
-  const domObserver = new MutationObserver(() => {
-    if (!document.querySelector('[data-gh-repo-list-shortcut]') && isRepositoryPage()) {
-      // 頻繁な実行を防ぐためにthrottle
-      if (domCheckTimeout) {
-        clearTimeout(domCheckTimeout);
-      }
-      domCheckTimeout = setTimeout(() => {
-        addRepositoryListLink();
-      }, 500);
-    }
-  });
-  
-  if (document.body) {
-    domObserver.observe(document.body, { subtree: true, childList: true });
-  } else {
-    document.addEventListener('DOMContentLoaded', () => {
-      domObserver.observe(document.body, { subtree: true, childList: true });
     });
+    observer.observe(document, { subtree: true, childList: true });
   }
+
+  // DOM変更を監視（動的コンテンツ読み込み対応）
+  function setupDOMObserver() {
+    let timeoutId = null;
+    const observer = new MutationObserver(() => {
+      if (!document.querySelector(SELECTORS.BUTTON) && isRepositoryPage()) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        timeoutId = setTimeout(addRepositoryListLink, DOM_CHECK_DELAY);
+      }
+    });
+
+    if (document.body) {
+      observer.observe(document.body, { subtree: true, childList: true });
+    } else {
+      document.addEventListener('DOMContentLoaded', () => {
+        observer.observe(document.body, { subtree: true, childList: true });
+      });
+    }
+  }
+
+  // 実行
+  init();
+  setupUrlObserver();
+  setupDOMObserver();
 
 })();
-
