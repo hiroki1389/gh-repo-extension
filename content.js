@@ -48,27 +48,30 @@
       display: 'inline-flex',
       alignItems: 'center',
       marginLeft: '8px',
-      padding: '5px 16px',
-      backgroundColor: '#0969da',
-      color: 'white',
+      padding: '5px 12px',
+      backgroundColor: '#f6f8fa',
+      color: '#24292f',
       textDecoration: 'none',
       borderRadius: '6px',
-      fontSize: '14px',
+      fontSize: '13px',
       fontWeight: '500',
-      transition: 'background-color 0.2s',
+      transition: 'background-color 0.2s, border-color 0.2s',
       whiteSpace: 'nowrap',
       cursor: 'pointer',
       verticalAlign: 'middle',
       lineHeight: '20px',
-      boxShadow: '0 1px 0 rgba(27, 31, 36, 0.1)'
+      border: '1px solid rgba(27, 31, 36, 0.15)',
+      boxShadow: 'none'
     });
 
     link.addEventListener('mouseenter', () => {
-      link.style.backgroundColor = '#0860ca';
+      link.style.backgroundColor = '#f3f4f6';
+      link.style.borderColor = 'rgba(27, 31, 36, 0.2)';
     });
     
     link.addEventListener('mouseleave', () => {
-      link.style.backgroundColor = '#0969da';
+      link.style.backgroundColor = '#f6f8fa';
+      link.style.borderColor = 'rgba(27, 31, 36, 0.15)';
     });
     
     link.addEventListener('click', () => {
