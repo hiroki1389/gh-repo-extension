@@ -85,7 +85,13 @@
     if (repoContextItem) {
       const repoTitle = repoContextItem.querySelector(SELECTORS.REPO_TITLE_LABEL);
       if (repoTitle) {
-        return { element: repoTitle, container: repoContextItem };
+        // context-region-crumbを探す（<a>タグの親要素）
+        const repoCrumb = repoContextItem.closest(SELECTORS.CONTEXT_CRUMB);
+        return { 
+          element: repoTitle, 
+          linkElement: repoContextItem,
+          container: repoCrumb || repoContextItem 
+        };
       }
     }
 
@@ -95,9 +101,14 @@
       const crumbs = contextRegion.querySelectorAll(SELECTORS.CONTEXT_CRUMB);
       if (crumbs.length >= 2) {
         const repoCrumb = crumbs[1];
-        const repoTitle = repoCrumb.querySelector(SELECTORS.REPO_TITLE_LABEL);
-        if (repoTitle) {
-          return { element: repoTitle, container: repoCrumb };
+        const repoLink = repoCrumb.querySelector('.AppHeader-context-item');
+        const repoTitle = repoLink?.querySelector(SELECTORS.REPO_TITLE_LABEL);
+        if (repoTitle && repoLink) {
+          return { 
+            element: repoTitle, 
+            linkElement: repoLink,
+            container: repoCrumb 
+          };
         }
       }
     }
@@ -112,21 +123,33 @@
     for (const selector of fallbackSelectors) {
       const element = document.querySelector(selector);
       if (element) {
-        return { element, container: element.parentElement };
+        return { 
+          element, 
+          linkElement: element.parentElement,
+          container: element.parentElement 
+        };
       }
     }
 
     return null;
   }
 
-  // ボタンを挿入
-  function insertButton(repoTitle, container, username) {
+  // ボタンを挿入（<a>タグの外側、context-region-crumbの子要素として）
+  function insertButton(repoTitleInfo, username) {
+    if (!repoTitleInfo) {
+      return false;
+    }
+
+    const { linkElement, container } = repoTitleInfo;
+    
+    // 既にボタンが存在するかチェック
     if (container.querySelector(SELECTORS.BUTTON)) {
       return false;
     }
 
     const link = createLinkButton(username);
-    repoTitle.insertAdjacentElement('afterend', link);
+    // <a>タグの後に挿入（context-region-crumbの子要素として）
+    linkElement.insertAdjacentElement('afterend', link);
     return true;
   }
 
@@ -149,7 +172,7 @@
     // リポジトリ名要素を探してボタンを挿入
     const repoTitleInfo = findRepositoryTitle();
     if (repoTitleInfo) {
-      if (insertButton(repoTitleInfo.element, repoTitleInfo.container, username)) {
+      if (insertButton(repoTitleInfo, username)) {
         return;
       }
     }
