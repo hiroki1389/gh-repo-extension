@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub リポジトリ一覧へのショートカット",
+  "version": "1.0.0",
+  "description": "GitHubのリポジトリページから、そのユーザーのリポジトリ一覧に一発で移動できる拡張機能",
+  "permissions": [
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ]
+}
+
