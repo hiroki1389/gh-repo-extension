@@ -39,9 +39,9 @@
   function createLinkButton(username) {
     const link = document.createElement('a');
     link.href = `https://github.com/${username}?tab=repositories`;
-    link.textContent = '📦 リポジトリ一覧';
+    link.textContent = '📦 Repositories';
     link.setAttribute('data-gh-repo-list-shortcut', 'true');
-    link.setAttribute('title', `${username}のリポジトリ一覧を見る`);
+    link.setAttribute('title', `View ${username}'s repositories`);
     
     // スタイル設定
     Object.assign(link.style, {
